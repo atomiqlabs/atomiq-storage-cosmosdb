@@ -33,6 +33,7 @@ function buildIndexingPolicy(
     const includedPathsMap = new Map<string, IndexedPath>();
 
     indexes.forEach(index => {
+        if(index.key==="id") return;
         includedPathsMap.set(toScalarPath(index.key), {
             path: toScalarPath(index.key)
         });

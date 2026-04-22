@@ -14,6 +14,8 @@ function toCompositeScalarPath(value) {
 function buildIndexingPolicy(indexes, compositeIndexes) {
     const includedPathsMap = new Map();
     indexes.forEach(index => {
+        if (index.key === "id")
+            return;
         includedPathsMap.set(toScalarPath(index.key), {
             path: toScalarPath(index.key)
         });
