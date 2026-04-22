@@ -22,6 +22,8 @@ function buildIndexingPolicy(indexes, compositeIndexes) {
     });
     compositeIndexes.forEach(index => {
         index.keys.forEach(key => {
+            if (key === "id")
+                return;
             const path = toScalarPath(key);
             if (includedPathsMap.has(path))
                 return;
