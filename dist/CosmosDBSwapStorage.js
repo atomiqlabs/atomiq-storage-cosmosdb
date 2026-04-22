@@ -2,6 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CosmosDBSwapStorage = void 0;
 const CosmosDBBase_1 = require("./CosmosDBBase");
+const CosmosDBConcurrencyError_1 = require("./CosmosDBConcurrencyError");
+function getBulkOperationItemId(result) {
+    if ("id" in result.operationInput)
+        return result.operationInput.id;
+    if ("resourceBody" in result.operationInput && result.operationInput.resourceBody != null) {
+        const resourceBody = result.operationInput.resourceBody;
+        return resourceBody.id;
+    }
+    return undefined;
+}
 function toCosmosPathSegment(value) {
     return /^[A-Za-z0-9_]+$/.test(value) ? value : JSON.stringify(value);
 }
@@ -104,27 +114,152 @@ class CosmosDBSwapStorage extends CosmosDBBase_1.CosmosDBBase {
             query: queryToSend,
             parameters: orQuery.length === 0 ? [] : values
         }).fetchAll();
+        resources.forEach(value => value._meta = { _etag: value._etag });
         return resources;
     }
     async remove(value) {
-        await this.removeItem(value.id);
+        let etag = value._meta?._etag;
+        try {
+            if (etag == null) {
+                await this.removeItem(value.id);
+            }
+            else {
+                await this.getContainer().item(value.id, value.id).delete({
+                    accessCondition: {
+                        type: "IfMatch",
+                        condition: etag
+                    }
+                });
+                etag = undefined;
+            }
+        }
+        catch (e) {
+            const statusCode = (0, CosmosDBBase_1.parseStatusCode)(e?.statusCode ?? e?.code);
+            if ((0, CosmosDBBase_1.isNotFoundStatusCode)(statusCode)) {
+                etag = undefined;
+                return;
+            }
+            if ((0, CosmosDBBase_1.isPreconditionFailedStatusCode)(statusCode))
+                throw new CosmosDBConcurrencyError_1.CosmosDBConcurrencyError([value.id], e);
+            throw e;
+        }
+        finally {
+            value._meta = etag == null ? undefined : { _etag: etag };
+        }
     }
-    async removeAll(value) {
-        await this.executeBulkOperations(value.map(val => ({
+    async removeAll(value, lenient) {
+        if (value.length === 0)
+            return;
+        const results = await this.getContainer().items.executeBulkOperations(value.map(val => ({
             operationType: "Delete",
             id: val.id,
-            partitionKey: val.id
-        })), true);
+            partitionKey: val.id,
+            ifMatch: val._meta?._etag
+        })));
+        try {
+            const failedOperations = results.filter(result => (0, CosmosDBBase_1.didBulkOperationFail)(result, true));
+            if (failedOperations.length !== 0) {
+                const allConcurrencyFailures = failedOperations.every(result => (0, CosmosDBBase_1.isPreconditionFailedStatusCode)(result.response?.statusCode ?? result.error?.code));
+                if (allConcurrencyFailures) {
+                    if (!lenient)
+                        throw new CosmosDBConcurrencyError_1.CosmosDBConcurrencyError(failedOperations
+                            .map(result => getBulkOperationItemId(result))
+                            .filter((id) => id != null), failedOperations[0].error);
+                }
+                else {
+                    const failedOperation = failedOperations[0];
+                    const statusCode = (0, CosmosDBBase_1.parseStatusCode)(failedOperation.response?.statusCode ?? failedOperation.error?.code);
+                    const message = failedOperation.error?.message;
+                    throw new Error("Cosmos DB bulk operation failed" +
+                        (statusCode == null ? "" : " with status " + statusCode) +
+                        (message == null ? "" : ": " + message));
+                }
+            }
+        }
+        finally {
+            value.forEach((val, index) => {
+                const statusCode = (0, CosmosDBBase_1.parseStatusCode)(results[index].response?.statusCode ?? results[index].error?.code);
+                if (statusCode != null && (statusCode < 300 || (0, CosmosDBBase_1.isNotFoundStatusCode)(statusCode)))
+                    val._meta = undefined;
+            });
+        }
     }
     async save(value) {
-        await this.getContainer().items.upsert(value);
+        const { _meta, ...toSave } = value;
+        let etag = _meta?._etag;
+        try {
+            const response = etag == null ?
+                await this.getContainer().items.upsert(toSave) :
+                await this.getContainer().item(value.id, value.id).replace(toSave, {
+                    accessCondition: {
+                        type: "IfMatch",
+                        condition: etag
+                    }
+                });
+            etag = response.etag;
+        }
+        catch (e) {
+            const statusCode = (0, CosmosDBBase_1.parseStatusCode)(e?.statusCode ?? e?.code);
+            if ((0, CosmosDBBase_1.isPreconditionFailedStatusCode)(statusCode) || (0, CosmosDBBase_1.isNotFoundStatusCode)(statusCode))
+                throw new CosmosDBConcurrencyError_1.CosmosDBConcurrencyError([value.id], e);
+            throw e;
+        }
+        finally {
+            value._meta = etag == null ? undefined : { _etag: etag };
+        }
     }
-    async saveAll(value) {
-        await this.executeBulkOperations(value.map(val => ({
-            operationType: "Upsert",
-            resourceBody: val,
-            partitionKey: val.id
-        })));
+    async saveAll(value, lenient) {
+        if (value.length === 0)
+            return;
+        const results = await this.getContainer().items.executeBulkOperations(value.map(val => {
+            const { _meta, ...toSave } = val;
+            const etag = _meta?._etag;
+            if (etag == null) {
+                return {
+                    operationType: "Upsert",
+                    resourceBody: toSave,
+                    partitionKey: val.id
+                };
+            }
+            return {
+                operationType: "Replace",
+                id: val.id,
+                resourceBody: toSave,
+                partitionKey: val.id,
+                ifMatch: etag
+            };
+        }));
+        try {
+            const failedOperations = results.filter(result => (0, CosmosDBBase_1.didBulkOperationFail)(result, false));
+            if (failedOperations.length !== 0) {
+                const allConcurrencyFailures = failedOperations.every(result => {
+                    const statusCode = (0, CosmosDBBase_1.parseStatusCode)(result.response?.statusCode ?? result.error?.code);
+                    return (0, CosmosDBBase_1.isPreconditionFailedStatusCode)(statusCode) ||
+                        ((0, CosmosDBBase_1.isNotFoundStatusCode)(statusCode) && result.operationInput.operationType === "Replace");
+                });
+                if (allConcurrencyFailures) {
+                    if (!lenient)
+                        throw new CosmosDBConcurrencyError_1.CosmosDBConcurrencyError(failedOperations
+                            .map(result => getBulkOperationItemId(result))
+                            .filter((id) => id != null), failedOperations[0].error);
+                }
+                else {
+                    const failedOperation = failedOperations[0];
+                    const statusCode = (0, CosmosDBBase_1.parseStatusCode)(failedOperation.response?.statusCode ?? failedOperation.error?.code);
+                    const message = failedOperation.error?.message;
+                    throw new Error("Cosmos DB bulk operation failed" +
+                        (statusCode == null ? "" : " with status " + statusCode) +
+                        (message == null ? "" : ": " + message));
+                }
+            }
+        }
+        finally {
+            value.forEach((val, index) => {
+                const etag = results[index].response?.eTag;
+                if (etag != null)
+                    val._meta = { _etag: etag };
+            });
+        }
     }
 }
 exports.CosmosDBSwapStorage = CosmosDBSwapStorage;

@@ -5,7 +5,7 @@ export declare class CosmosDBSwapStorage extends CosmosDBBase implements IUnifie
     init(indexes: UnifiedSwapStorageIndexes, compositeIndexes: UnifiedSwapStorageCompositeIndexes): Promise<void>;
     query(params: Array<Array<QueryParams>>): Promise<Array<UnifiedStoredObject>>;
     remove(value: UnifiedStoredObject): Promise<void>;
-    removeAll(value: UnifiedStoredObject[]): Promise<void>;
+    removeAll(value: UnifiedStoredObject[], lenient?: boolean): Promise<void>;
     save(value: UnifiedStoredObject): Promise<void>;
-    saveAll(value: UnifiedStoredObject[]): Promise<void>;
+    saveAll(value: UnifiedStoredObject[], lenient?: boolean): Promise<void>;
 }

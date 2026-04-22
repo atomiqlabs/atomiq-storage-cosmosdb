@@ -1,10 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CosmosDBBase = void 0;
+exports.CosmosDBBase = exports.didBulkOperationFail = exports.isSuccessfulStatusCode = exports.isPreconditionFailedStatusCode = exports.isNotFoundStatusCode = exports.parseStatusCode = void 0;
 const cosmos_1 = require("@azure/cosmos");
-function isSuccessfulStatusCode(statusCode) {
-    return statusCode >= 200 && statusCode < 300;
-}
 function parseStatusCode(statusCode) {
     if (typeof statusCode === "number")
         return statusCode;
@@ -14,12 +11,19 @@ function parseStatusCode(statusCode) {
     }
     return undefined;
 }
+exports.parseStatusCode = parseStatusCode;
 function isNotFoundStatusCode(statusCode) {
-    return parseStatusCode(statusCode) === 404;
+    return parseStatusCode(statusCode) === cosmos_1.StatusCodes.NotFound;
 }
-function isNotFoundError(error) {
-    return isNotFoundStatusCode(error?.statusCode ?? error?.code);
+exports.isNotFoundStatusCode = isNotFoundStatusCode;
+function isPreconditionFailedStatusCode(statusCode) {
+    return parseStatusCode(statusCode) === cosmos_1.StatusCodes.PreconditionFailed;
 }
+exports.isPreconditionFailedStatusCode = isPreconditionFailedStatusCode;
+function isSuccessfulStatusCode(statusCode) {
+    return statusCode >= 200 && statusCode < 300;
+}
+exports.isSuccessfulStatusCode = isSuccessfulStatusCode;
 function didBulkOperationFail(result, ignoreNotFound) {
     const statusCode = parseStatusCode(result.response?.statusCode ?? result.error?.code);
     if (statusCode != null) {
@@ -31,6 +35,10 @@ function didBulkOperationFail(result, ignoreNotFound) {
     if (result.error == null)
         return statusCode == null;
     return !(ignoreNotFound && isNotFoundError(result.error));
+}
+exports.didBulkOperationFail = didBulkOperationFail;
+function isNotFoundError(error) {
+    return isNotFoundStatusCode(error?.statusCode ?? error?.code);
 }
 class CosmosDBBase {
     constructor(containerId, connectionString, databaseName = "Atomiq") {

@@ -1,10 +1,6 @@
-import {BulkOperationResult, Container, CosmosClient, OperationInput} from "@azure/cosmos";
+import {BulkOperationResult, Container, CosmosClient, OperationInput, StatusCodes} from "@azure/cosmos";
 
-function isSuccessfulStatusCode(statusCode: number): boolean {
-    return statusCode >= 200 && statusCode < 300;
-}
-
-function parseStatusCode(statusCode: number | string | undefined): number | undefined {
+export function parseStatusCode(statusCode: number | string | undefined): number | undefined {
     if(typeof statusCode === "number") return statusCode;
     if(typeof statusCode === "string") {
         const parsedValue = Number(statusCode);
@@ -13,15 +9,19 @@ function parseStatusCode(statusCode: number | string | undefined): number | unde
     return undefined;
 }
 
-function isNotFoundStatusCode(statusCode: number | string | undefined): boolean {
-    return parseStatusCode(statusCode) === 404;
+export function isNotFoundStatusCode(statusCode: number | string | undefined): boolean {
+    return parseStatusCode(statusCode) === StatusCodes.NotFound;
 }
 
-function isNotFoundError(error: any): boolean {
-    return isNotFoundStatusCode(error?.statusCode ?? error?.code);
+export function isPreconditionFailedStatusCode(statusCode: number | string | undefined): boolean {
+    return parseStatusCode(statusCode) === StatusCodes.PreconditionFailed;
 }
 
-function didBulkOperationFail(result: BulkOperationResult, ignoreNotFound: boolean): boolean {
+export function isSuccessfulStatusCode(statusCode: number): boolean {
+    return statusCode >= 200 && statusCode < 300;
+}
+
+export function didBulkOperationFail(result: BulkOperationResult, ignoreNotFound: boolean): boolean {
     const statusCode = parseStatusCode(result.response?.statusCode ?? result.error?.code);
     if(statusCode != null) {
         if(isSuccessfulStatusCode(statusCode)) return false;
@@ -30,6 +30,10 @@ function didBulkOperationFail(result: BulkOperationResult, ignoreNotFound: boole
 
     if(result.error == null) return statusCode == null;
     return !(ignoreNotFound && isNotFoundError(result.error));
+}
+
+function isNotFoundError(error: any): boolean {
+    return isNotFoundStatusCode(error?.statusCode ?? error?.code);
 }
 
 export abstract class CosmosDBBase {
