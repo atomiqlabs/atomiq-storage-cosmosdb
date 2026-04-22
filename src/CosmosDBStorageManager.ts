@@ -1,29 +1,34 @@
-import {Container, CosmosClient, DeleteOperationInput, UpsertOperationInput} from "@azure/cosmos";
-import {IStorageManager, QueryParams, StorageObject, UnifiedStoredObject} from "@atomiqlabs/sdk";
+import {DeleteOperationInput, UpsertOperationInput} from "@azure/cosmos";
+import {IStorageManager, StorageObject} from "@atomiqlabs/base";
+import {CosmosDBBase} from "./CosmosDBBase";
 
-export class CosmosDBStorageManager<T extends StorageObject> implements IStorageManager<T> {
+type StoredStorageManagerObject = {
+    id: string;
+    value: any;
+};
 
-    client: CosmosClient;
-    name: string;
-    container: Container;
+export class CosmosDBStorageManager<T extends StorageObject = StorageObject> extends CosmosDBBase implements IStorageManager<T> {
 
-    constructor(name: string) {
-        this.name = name;
-        this.client = new CosmosClient(process.env.COSMOS_CONECTION_STRING);
+    constructor(name: string, connectionString: string, databaseName: string = "Atomiq") {
+        super(name, connectionString, databaseName);
     }
 
     async init(): Promise<void> {
-        const {container} = await this.client.database("Atomiq").containers.createIfNotExists({
+        await this.initDatabase();
+        const {container} = await this.client.database(this.databaseName).containers.createIfNotExists({
             partitionKey: "/id",
-            id: this.name
+            id: this.containerId,
+            indexingPolicy: {
+                indexingMode: "none"
+            }
         });
         this.container = container;
     }
 
-    data: { [p: string]: T };
+    data: { [p: string]: T } = {};
 
     async loadData(type: { new(data: any): T }): Promise<T[]> {
-        const {resources} = await this.container.items.readAll().fetchAll();
+        const {resources} = await this.getContainer().items.readAll<StoredStorageManagerObject>().fetchAll();
         this.data = {};
         const allData: T[] = [];
         resources.forEach(({id, value}) => {
@@ -35,43 +40,33 @@ export class CosmosDBStorageManager<T extends StorageObject> implements IStorage
     }
 
     async removeData(hash: string): Promise<void> {
-        await this.container.item(hash, hash).delete();
+        await this.removeItem(hash);
     }
 
     async removeDataArr(keys: string[]): Promise<void> {
-        let temp: DeleteOperationInput[] = [];
-        for(let id of keys) {
-            temp.push({
-                operationType: "Delete",
-                id: id,
-                partitionKey: id
-            });
-            if(temp.length>=100) {
-                await this.container.items.bulk(temp, {continueOnError: true});
-                temp = [];
-            }
-        }
-        if(temp.length>0) await this.container.items.bulk(temp);
+        await this.executeBulkOperations(keys.map<DeleteOperationInput>(id => ({
+            operationType: "Delete",
+            id,
+            partitionKey: id
+        })), true);
     }
 
     async saveData(hash: string, object: T): Promise<void> {
-        await this.container.items.upsert({id: hash, value: object.serialize()});
+        await this.getContainer().items.upsert({
+            id: hash,
+            value: object.serialize()
+        });
     }
 
     async saveDataArr(values: { id: string; object: T }[]): Promise<void> {
-        let temp: UpsertOperationInput[] = [];
-        for(let val of values) {
-            temp.push({
-                operationType: "Upsert",
-                resourceBody: val.object.serialize(),
-                partitionKey: val.id
-            });
-            if(temp.length>=100) {
-                await this.container.items.bulk(temp);
-                temp = [];
-            }
-        }
-        if(temp.length>0) await this.container.items.bulk(temp);
+        await this.executeBulkOperations(values.map<UpsertOperationInput>(val => ({
+            operationType: "Upsert",
+            resourceBody: {
+                id: val.id,
+                value: val.object.serialize()
+            },
+            partitionKey: val.id
+        })));
     }
 
 }
