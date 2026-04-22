@@ -1,0 +1,38 @@
+{
+  "name": "@atomiqlabs/storage-cosmosdb",
+  "version": "5.0.2",
+  "description": "Microsoft Azure CosmosDB storage implementation for atomiqlabs SDK",
+  "main": "./dist/index.js",
+  "types:": "./dist/index.d.ts",
+  "scripts": {
+    "build": "npx -y -p typescript@4.9 tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:ts4": "npx -p typescript@4.9 tsc --noEmit",
+    "build:ts5": "npx -p typescript@5.3 tsc --noEmit"
+  },
+  "files": [
+    "/dist",
+    "/src"
+  ],
+  "keywords": [
+    "Solana",
+    "Bitcoin",
+    "Cross-chain",
+    "Cryptocurrency",
+    "Bridge",
+    "Trustless"
+  ],
+  "author": "adambor",
+  "license": "ISC",
+  "dependencies": {
+    "@azure/cosmos": "^4.9.3"
+  },
+  "peerDependencies": {
+    "@atomiqlabs/base": ">=13.0.0 <14.0.0",
+    "@atomiqlabs/sdk": ">=8.0.0 <9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.3",
+    "typescript": ">=4"
+  }
+}
