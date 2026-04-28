@@ -1,6 +1,6 @@
 {
   "name": "@atomiqlabs/storage-cosmosdb",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Microsoft Azure CosmosDB storage implementation for atomiqlabs SDK",
   "main": "./dist/index.js",
   "types:": "./dist/index.d.ts",

@@ -211,7 +211,7 @@ class CosmosDBSwapPatchStorage extends CosmosDBBase_1.CosmosDBBase {
                             batchOperations.push({
                                 operationType: "Patch",
                                 id: value.id,
-                                resourceBody: patches.slice(i, i + 10),
+                                resourceBody: { operations: patches.slice(i, i + 10) },
                                 partitionKey: value.id,
                                 ifMatch: batchOperations.length === 0 && this.optimisticConcurrency ? etag : undefined
                             });
@@ -282,7 +282,7 @@ class CosmosDBSwapPatchStorage extends CosmosDBBase_1.CosmosDBBase {
                         bulkOperations.push({
                             operationType: "Patch",
                             id: value.id,
-                            resourceBody: patches,
+                            resourceBody: { operations: patches },
                             partitionKey: value.id,
                             ifMatch: this.optimisticConcurrency ? etag : undefined
                         });

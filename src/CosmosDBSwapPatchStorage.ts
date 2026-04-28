@@ -2,7 +2,8 @@ import {
     CompositePath,
     DeleteOperationInput,
     IndexedPath,
-    IndexingPolicy, PatchOperationInput,
+    IndexingPolicy,
+    PatchOperationInput,
     ReplaceOperationInput,
     UpsertOperationInput
 } from "@azure/cosmos";
@@ -247,7 +248,7 @@ export class CosmosDBSwapPatchStorage extends CosmosDBBase implements IUnifiedSt
                             batchOperations.push({
                                 operationType: "Patch",
                                 id: value.id,
-                                resourceBody: patches.slice(i, i+10),
+                                resourceBody: {operations: patches.slice(i, i+10)},
                                 partitionKey: value.id,
                                 ifMatch: batchOperations.length===0 && this.optimisticConcurrency ? etag : undefined
                             });
@@ -313,7 +314,7 @@ export class CosmosDBSwapPatchStorage extends CosmosDBBase implements IUnifiedSt
                         bulkOperations.push({
                             operationType: "Patch",
                             id: value.id,
-                            resourceBody: patches,
+                            resourceBody: {operations: patches},
                             partitionKey: value.id,
                             ifMatch: this.optimisticConcurrency ? etag : undefined
                         });
