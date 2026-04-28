@@ -59,7 +59,7 @@ export class CosmosDBStorageManager<T extends StorageObject = StorageObject> ext
     }
 
     async saveDataArr(values: { id: string; object: T }[]): Promise<void> {
-        await this.executeBulkOperations(values.map<UpsertOperationInput>(val => ({
+        const {error} = await this.executeBulkOperations(values.map<UpsertOperationInput>(val => ({
             operationType: "Upsert",
             resourceBody: {
                 id: val.id,
@@ -67,6 +67,7 @@ export class CosmosDBStorageManager<T extends StorageObject = StorageObject> ext
             },
             partitionKey: val.id
         })));
+        if(error!=null) throw error;
     }
 
 }

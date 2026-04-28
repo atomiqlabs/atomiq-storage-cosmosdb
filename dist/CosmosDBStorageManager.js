@@ -46,7 +46,7 @@ class CosmosDBStorageManager extends CosmosDBBase_1.CosmosDBBase {
         });
     }
     async saveDataArr(values) {
-        await this.executeBulkOperations(values.map(val => ({
+        const { error } = await this.executeBulkOperations(values.map(val => ({
             operationType: "Upsert",
             resourceBody: {
                 id: val.id,
@@ -54,6 +54,8 @@ class CosmosDBStorageManager extends CosmosDBBase_1.CosmosDBBase {
             },
             partitionKey: val.id
         })));
+        if (error != null)
+            throw error;
     }
 }
 exports.CosmosDBStorageManager = CosmosDBStorageManager;
